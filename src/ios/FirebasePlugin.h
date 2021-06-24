@@ -51,6 +51,7 @@
 - (void)sendToken:(NSString*)token;
 - (void)sendApnsToken:(NSString*)token;
 - (void)clearAllNotifications:(CDVInvokedUrlCommand *)command;
+- (void) registerForRemoteNotifications;
 
 // Analytics
 - (void)setAnalyticsCollectionEnabled:(CDVInvokedUrlCommand*)command;
