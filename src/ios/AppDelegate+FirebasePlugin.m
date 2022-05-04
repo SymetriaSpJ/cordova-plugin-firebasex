@@ -333,6 +333,12 @@ didDisconnectWithUser:(GIDGoogleUser *)user
     [FirebasePlugin.firebasePlugin _logError:[NSString stringWithFormat:@"didFailToRegisterForRemoteNotificationsWithError: %@", error.description]];
 }
 
+- (BOOL)application:(nonnull UIApplication *)application
+            openURL:(nonnull NSURL *)url
+            options:(nonnull NSDictionary<NSString *, id> *)options {
+  return [[GIDSignIn sharedInstance] handleURL:url];
+}
+
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center openSettingsForNotification:(UNNotification *)notification
 {
     @try {
@@ -504,6 +510,14 @@ didDisconnectWithUser:(GIDGoogleUser *)user
                     NSMutableDictionary* result = [[NSMutableDictionary alloc] init];
                     [result setValue:@"true" forKey:@"instantVerification"];
                     [result setValue:key forKey:@"id"];
+                    if(appleIDCredential.fullName != nil){
+                        if(appleIDCredential.fullName.givenName != nil){
+                            [result setValue:appleIDCredential.fullName.givenName forKey:@"givenName"];
+                        }
+                        if(appleIDCredential.fullName.familyName != nil){
+                            [result setValue:appleIDCredential.fullName.familyName forKey:@"familyName"];
+                        }
+                    }
                     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:result];
                 }
             }
