@@ -53,7 +53,7 @@ static NSMutableDictionary* firestoreListeners;
     firestore = firestoreInstance;
 }
 
-(void)applicationLaunchedWithUrl:(NSNotification*)notification
+- (void)applicationLaunchedWithUrl:(NSNotification*)notification
 {
     NSURL* url = [notification object];
     [[GIDSignIn sharedInstance] handleURL:url];
