@@ -55,6 +55,12 @@ static NSMutableDictionary* traces;
     firestore = firestoreInstance;
 }
 
+- (void)applicationLaunchedWithUrl:(NSNotification*)notification
+{
+    NSURL* url = [notification object];
+    [[GIDSignIn sharedInstance] handleURL:url];
+}
+
 // @override abstract
 - (void)pluginInitialize {
     NSLog(@"Starting Firebase plugin");
@@ -63,6 +69,8 @@ static NSMutableDictionary* traces;
     @try {
         preferences = [NSUserDefaults standardUserDefaults];
         googlePlist = [NSMutableDictionary dictionaryWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"GoogleService-Info" ofType:@"plist"]];
+
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationLaunchedWithUrl:) name:CDVPluginHandleOpenURLNotification object:nil];
 
         if([self getGooglePlistFlagWithDefaultValue:FirebaseCrashlyticsCollectionEnabled defaultValue:YES]){
             [self setPreferenceFlag:FIREBASE_CRASHLYTICS_COLLECTION_ENABLED flag:YES];
@@ -81,7 +89,7 @@ static NSMutableDictionary* traces;
 
         // Check for permission and register for remote notifications if granted
         [self _hasPermission:^(BOOL result) {}];
-        
+
 
         authCredentials = [[NSMutableDictionary alloc] init];
         firestoreListeners = [[NSMutableDictionary alloc] init];
@@ -738,7 +746,7 @@ static NSMutableDictionary* traces;
         [GIDSignIn.sharedInstance signInWithConfiguration:googleSignInConfig presentingViewController:self.viewController callback:^(GIDGoogleUser * _Nullable user, NSError * _Nullable error) {
           __auto_type strongSelf = weakSelf;
           if (strongSelf == nil) { return; }
-            
+
             @try{
                 CDVPluginResult* pluginResult;
                 if (error == nil) {
@@ -746,7 +754,7 @@ static NSMutableDictionary* traces;
                     FIRAuthCredential *credential =
                     [FIRGoogleAuthProvider credentialWithIDToken:authentication.idToken
                                                    accessToken:authentication.accessToken];
-                    
+
                     NSNumber* key = [[FirebasePlugin firebasePlugin] saveAuthCredential:credential];
                     NSString *idToken = user.authentication.idToken;
                     NSMutableDictionary* result = [[NSMutableDictionary alloc] init];
