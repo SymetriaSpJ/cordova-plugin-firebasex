@@ -154,6 +154,8 @@ To help ensure this plugin is kept updated, new features are added and bugfixes 
     - [linkUserWithCredential](#linkuserwithcredential)
     - [reauthenticateWithCredential](#reauthenticatewithcredential)
     - [registerAuthStateChangeListener](#registerauthstatechangelistener)
+    - [useAuthEmulator](#useAuthEmulator)
+    - [getClaims](#getClaims)
   - [Remote Config](#remote-config)
     - [fetch](#fetch)
     - [activateFetched](#activatefetched)
@@ -210,6 +212,7 @@ Note that these must be set at plugin installation time. If you wish to change p
 - `FIREBASE_ANALYTICS_COLLECTION_ENABLED` - whether to automatically enable Firebase Analytics data collection on app startup
 - `FIREBASE_PERFORMANCE_COLLECTION_ENABLED` - whether to automatically enable Firebase Performance data collection on app startup
 - `FIREBASE_CRASHLYTICS_COLLECTION_ENABLED` - whether to automatically enable Firebase Crashlytics data collection on app startup
+- `FIREBASE_FCM_AUTOINIT_ENABLED` - whether to automatically enable FCM registration on app startup
 See [Disable data collection on startup](#disable-data-collection-on-startup) for more info.
 
 ### Android only
@@ -242,6 +245,12 @@ See [Specifying Android library versions](#specifying-android-library-versions) 
 - `ANDROID_GRPC_OKHTTP` - sets version of GRPC OKHTTP library.
 
 ### iOS only
+- `IOS_FIREBASE_SDK_VERSION` - a specific version of the Firebase iOS SDK to set in the Podfile
+  -  If not specified, the default version defined in `<pod>` elements in the `plugin.xml` will be used.
+- `IOS_USE_PRECOMPILED_FIRESTORE_POD` - if `true`, switches Podfile to use a [pre-compiled version of the Firestore pod](https://github.com/invertase/firestore-ios-sdk-frameworks.git) to reduce build time
+  - Since some users experienced long build times due to the Firestore pod (see [#407](https://github.com/dpa99c/cordova-plugin-firebasex/issues/407))
+  - However other users have experienced build issues with the pre-compiled version (see [#735](https://github.com/dpa99c/cordova-plugin-firebasex/issues/735))
+  - Defaults to `false` if not specified.
 - `IOS_STRIP_DEBUG` - prevents symbolification of all libraries included via Cocoapods. See [Strip debug symbols](#strip-debug-symbols) for more info.
     - e.g.  `--variable IOS_STRIP_DEBUG=true`
     - Defaults to `false` if not specified.
@@ -289,9 +298,9 @@ Therefore you can no longer directly substitute `cordova-plugin-firebasex` in pl
 
 You should be aware of the following breaking changes compared with `cordova-plugin-firebase`:
 * Minimum supported Cordova versions
-    * `cordova@9` (CLI)
-    * `cordova-android@8` (Android platform)
-    * `cordova-ios@5` (iOS platform)
+    * `cordova@10` (CLI)
+    * `cordova-android@10` (Android platform)
+    * `cordova-ios@6` (iOS platform)
 * Migrated to AndroidX from legacy Android Support Library
 * Migrated to Cocoapods to satisfy Firebase SDK dependencies on iOS
 * `onNotificationOpen()` renamed to `onMessageReceived()`
@@ -471,11 +480,14 @@ This plugin pins specific versions of these in [its `plugin.xml`](https://github
 
     <pod name="Firebase/Core" spec="6.3.0"/>
 
-**It is currently not possible to override these at plugin installation time** because `cordova@9`/`cordova-ios@5` does not support the use of plugin variables in the `<pod>`'s `spec` attribute.
-Therefore if you need to change the specified versions, you'll currently need to do this by forking the plugin and editing the `plugin.xml` to change the specified `spec` values.
+Cordova does not natively support the use of plugin variables in the `<pod>`'s `spec` attribute, however this plugin uses a hook script to enable this behaviour by overriding the version specified in `plugin.xml` directly within the `Podfile`.
+Therefore to override the version of the Firebase iOS SDK components set in the `plugin.xml`, you should define it using the `IOS_FIREBASE_SDK_VERSION` plugin variable when installing the plugin into your project.
+For example:
+
+    cordova plugin add cordova-plugin-firebasex --variable IOS_FIREBASE_SDK_VERSION=9.1.0
 
 ### Cocoapods
-This plugin relies on `cordova@9`/`cordova-ios@5` support for the [CocoaPods dependency manager]( https://cocoapods.org/) in order to satisfy the iOS Firebase SDK library dependencies.
+This plugin relies on Cordova support for the [CocoaPods dependency manager]( https://cocoapods.org/) in order to satisfy the iOS Firebase SDK library dependencies.
 
 Please make sure you have `cocoapods@>=1.11.2` installed in your iOS build environment - setup instructions can be found [here](https://cocoapods.org/).
 
@@ -1708,11 +1720,15 @@ FirebasePlugin.hasCriticalPermission(function(hasPermission){
 ```
 
 ### unregister
-Unregisters from Firebase by deleting the current device token.
+Unregisters from Firebase Cloud Messaging by deleting the current FCM device token.
 Use this to stop receiving push notifications associated with the current token.
 e.g. call this when you logout user from your app.
 By default, a new token will be generated as soon as the old one is removed.
-To prevent a new token being generated, by sure to disable autoinit using [`setAutoInitEnabled()`](#setautoinitenabled) before calling [`unregister()`](#unregister).
+To prevent a new token being generated, be sure to disable autoinit using [`setAutoInitEnabled()`](#setautoinitenabled) before calling [`unregister()`](#unregister).
+
+You can disable autoinit on first run and therefore prevent an FCM token being allocated by default (allowing user opt-in) by setting the `FIREBASE_FCM_AUTOINIT_ENABLED` plugin variable at plugin installation time:
+
+    cordova plugin add cordova-plugin-firebasex --variable FIREBASE_FCM_AUTOINIT_ENABLED=false
 
 **Parameters**: None
 
@@ -2937,6 +2953,32 @@ FirebasePlugin.useAuthEmulator('localhost', 9099, function() {
 });
 ```
 
+### getClaims
+Returns the entire payload claims of the ID token including the standard reserved claims as well as the custom claims (set by developer via Admin SDK).
+
+
+**Parameters**:
+- {function} success - callback function to pass claims {object} to as an argument
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+Example usage:
+
+```javascript
+FirebasePlugin.getClaims(function(claims) {
+    // reserved claims
+    console.log("email", claims.email);
+    console.log("email_verified", claims.email_verified);
+    console.log("name", claims.name);
+    console.log("user_id", claims.user_id);
+
+    //custom claims
+    console.log("exampleClaimA", claims.exampleClaimA);
+    console.log("exampleClaimB", claims.exampleClaimB);
+}, function(error) {
+    console.error("Failed to enable the Firebase Authentication emulator", error);
+});
+```
+
 ## Remote Config
 
 ### fetch
@@ -3216,9 +3258,10 @@ Adds a new document to a Firestore collection, which will be allocated an auto-g
 **Parameters**:
 - {object} document - document object to add to collection
 - {string} collection - name of top-level collection to add document to.
-- {function} success - callback function to call on successfully adding the document.
+- {boolean} timestamp (optional) - Add 'created' and 'lastUpdate' variables in the document. Default ```false```.
+- {function} success (optional) - callback function to call on successfully adding the document.
 Will be passed a {string} argument containing the auto-generated document ID that the document was stored against.
-- {function} error - callback function which will be passed a {string} error message as an argument.
+- {function} error (optional) - callback function which will be passed a {string} error message as an argument.
 
 ```javascript
 var document = {
@@ -3229,6 +3272,15 @@ var document = {
     }
 };
 var collection = "my_collection";
+
+// with timestamp
+FirebasePlugin.addDocumentToFirestoreCollection(document, collection, true, function(documentId){
+    console.log("Successfully added document with id="+documentId);
+}, function(error){
+    console.error("Error adding document: "+error);
+});
+
+// without timestamp
 FirebasePlugin.addDocumentToFirestoreCollection(document, collection, function(documentId){
     console.log("Successfully added document with id="+documentId);
 }, function(error){
@@ -3243,8 +3295,9 @@ Sets (adds/replaces) a document with the given ID in a Firestore collection.
 - {string} documentId - document ID to use when setting document in the collection.
 - {object} document - document object to set in collection.
 - {string} collection - name of top-level collection to set document in.
-- {function} success - callback function to call on successfully setting the document.
-- {function} error - callback function which will be passed a {string} error message as an argument.
+- {boolean} timestamp (optional) - Add 'lastUpdate' variable in the document. Default ```false```.
+- {function} success (optional) - callback function to call on successfully setting the document.
+- {function} error (optional) - callback function which will be passed a {string} error message as an argument.
 
 ```javascript
 var documentId = "my_doc";
@@ -3256,6 +3309,15 @@ var document = {
     }
 };
 var collection = "my_collection";
+
+// with timestamp
+FirebasePlugin.setDocumentInFirestoreCollection(documentId, document, collection, true, function(){
+    console.log("Successfully set document with id="+documentId);
+}, function(error){
+    console.error("Error setting document: "+error);
+});
+
+// without timestamp
 FirebasePlugin.setDocumentInFirestoreCollection(documentId, document, collection, function(){
     console.log("Successfully set document with id="+documentId);
 }, function(error){
@@ -3272,8 +3334,9 @@ If the no document with the specified ID exists in the collection, an error will
 - {string} documentId - document ID of the document to update.
 - {object} document - entire document or document fragment to update existing document with.
 - {string} collection - name of top-level collection to update document in.
-- {function} success - callback function to call on successfully updating the document.
-- {function} error - callback function which will be passed a {string} error message as an argument.
+- {boolean} timestamp (optional) - Add 'lastUpdate' variable in the document. Default ```false```.
+- {function} success (optional) - callback function to call on successfully updating the document.
+- {function} error (optional) - callback function which will be passed a {string} error message as an argument.
 
 ```javascript
 var documentId = "my_doc";
@@ -3282,6 +3345,15 @@ var documentFragment = {
     "a_new_string": "bar"
 };
 var collection = "my_collection";
+
+// with timestamp
+FirebasePlugin.updateDocumentInFirestoreCollection(documentId, documentFragment, collection, true, function(){
+    console.log("Successfully updated document with id="+documentId);
+}, function(error){
+    console.error("Error updating document: "+error);
+});
+
+// without timestamp
 FirebasePlugin.updateDocumentInFirestoreCollection(documentId, documentFragment, collection, function(){
     console.log("Successfully updated document with id="+documentId);
 }, function(error){
