@@ -41,6 +41,7 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.Timestamp;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.AuthResult;
@@ -94,6 +95,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.List;
+import java.util.Date;
 
 // Firebase PhoneAuth
 import java.util.concurrent.TimeUnit;
@@ -325,6 +327,8 @@ public class FirebasePlugin extends CordovaPlugin {
                 this.deleteUser(callbackContext, args);
             } else if (action.equals("useAuthEmulator")) {
                 this.useAuthEmulator(callbackContext, args);
+            } else if (action.equals("getClaims")) {
+                this.getClaims(callbackContext, args);
             } else if (action.equals("startTrace")) {
                 this.startTrace(callbackContext, args.getString(0));
             } else if (action.equals("incrementCounter")) {
@@ -1779,6 +1783,41 @@ public class FirebasePlugin extends CordovaPlugin {
         });
     }
 
+    public void getClaims(final CallbackContext callbackContext, final JSONArray args){
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+
+                    if(user == null){
+                        callbackContext.error("No user is currently signed");
+                        return;
+                    }
+
+                    user.getIdToken(true).addOnSuccessListener(new OnSuccessListener<GetTokenResult>() {
+                        @Override
+                        public void onSuccess(GetTokenResult result) {
+                            try {
+                                Map<String, Object> claims = result.getClaims();
+                                JSONObject returnResults = new JSONObject(claims);
+                                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, returnResults));
+                            } catch (Exception e) {
+                                handleExceptionWithContext(e, callbackContext);
+                            }
+                        }
+                    }).addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            handleExceptionWithContext(e, callbackContext);
+                        }
+                    });
+                } catch (Exception e) {
+                    handleExceptionWithContext(e, callbackContext);
+                }
+            }
+        });
+    }
+
     //
     // Firebase Performace
     //
@@ -2196,9 +2235,17 @@ public class FirebasePlugin extends CordovaPlugin {
                 try {
                     String jsonDoc = args.getString(0);
                     String collection = args.getString(1);
+                    boolean timestamp = args.getBoolean(2);
+
+                    Map<String, Object> docData = jsonStringToMap(jsonDoc);
+                    
+                    if(timestamp){
+                        docData.put("created", new Timestamp(new Date()));
+                        docData.put("lastUpdate", new Timestamp(new Date()));    
+                    }  
 
                     firestore.collection(collection)
-                            .add(jsonStringToMap(jsonDoc))
+                            .add(docData)
                             .addOnSuccessListener(new OnSuccessListener<DocumentReference>() {
                                 @Override
                                 public void onSuccess(DocumentReference documentReference) {
@@ -2225,9 +2272,16 @@ public class FirebasePlugin extends CordovaPlugin {
                     String documentId = args.getString(0);
                     String jsonDoc = args.getString(1);
                     String collection = args.getString(2);
+                    boolean timestamp = args.getBoolean(3);
+
+                    Map<String, Object> docData = jsonStringToMap(jsonDoc);
+
+                    if(timestamp){
+                        docData.put("lastUpdate", new Timestamp(new Date()));    
+                    }          
 
                     firestore.collection(collection).document(documentId)
-                            .set(jsonStringToMap(jsonDoc))
+                            .set(docData)
                             .addOnSuccessListener(new OnSuccessListener<Void>() {
                                 @Override
                                 public void onSuccess(Void aVoid) {
@@ -2254,9 +2308,16 @@ public class FirebasePlugin extends CordovaPlugin {
                     String documentId = args.getString(0);
                     String jsonDoc = args.getString(1);
                     String collection = args.getString(2);
+                    boolean timestamp = args.getBoolean(3);
+
+                    Map<String, Object> docData = jsonStringToMap(jsonDoc);
+
+                    if(timestamp){
+                        docData.put("lastUpdate", new Timestamp(new Date()));    
+                    }  
 
                     firestore.collection(collection).document(documentId)
-                            .update(jsonStringToMap(jsonDoc))
+                            .update(docData)
                             .addOnSuccessListener(new OnSuccessListener<Void>() {
                                 @Override
                                 public void onSuccess(Void aVoid) {

@@ -485,7 +485,22 @@ static NSMutableDictionary* traces;
 }
 
 - (void)unregister:(CDVInvokedUrlCommand *)command {
-    [self deleteInstallationId:command];
+    @try {
+        __block NSError* error = nil;
+        [[FIRMessaging messaging] deleteTokenWithCompletion:^(NSError * _Nullable deleteTokenError) {
+            if(error == nil && deleteTokenError != nil) error = deleteTokenError;
+            if([FIRMessaging messaging].isAutoInitEnabled){
+                [self _getToken:^(NSString* token, NSError* getError) {
+                    if(error == nil && getError != nil) error = getError;
+                    [self handleEmptyResultWithPotentialError:error command:command];
+                }];
+            }else{
+                [self handleEmptyResultWithPotentialError:error command:command];
+            }
+        }];
+    }@catch (NSException *exception) {
+        [self handlePluginExceptionWithContext:exception :command];
+    }
 }
 
 - (void) onOpenSettings:(CDVInvokedUrlCommand *)command {
@@ -1183,6 +1198,29 @@ static NSMutableDictionary* traces;
     }
 }
 
+- (void)getClaims:(CDVInvokedUrlCommand *)command {
+    @try {
+        FIRUser* user = [FIRAuth auth].currentUser;
+
+        if(!user){
+            [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No user is currently signed"] callbackId:command.callbackId];
+            return;
+        }
+
+        [user getIDTokenResultWithCompletion:^(FIRAuthTokenResult * _Nullable tokenResult, NSError * _Nullable error) {
+            if(error != nil){
+                [self sendPluginErrorWithError:error command:command];
+                return;
+            }
+
+            [self sendPluginDictionaryResult:tokenResult.claims command:command callbackId:command.callbackId];
+        }];
+
+    }@catch (NSException *exception) {
+        [self handlePluginExceptionWithContext:exception :command];
+    }
+}
+
 /*
  * Analytics
  */
@@ -1704,8 +1742,17 @@ static NSMutableDictionary* traces;
         @try {
             NSDictionary* document = [command.arguments objectAtIndex:0];
             NSString* collection = [command.arguments objectAtIndex:1];
+            bool  timestamp = [command.arguments objectAtIndex:2];
+
+            NSMutableDictionary *document_mutable = [document mutableCopy];
+
+            if(timestamp){
+                document_mutable[@"created"] = [FIRTimestamp timestampWithDate:[NSDate date]];
+                document_mutable[@"lastUpdate"] = [FIRTimestamp timestampWithDate:[NSDate date]];
+            }
+
             __block FIRDocumentReference *ref =
-            [[firestore collectionWithPath:collection] addDocumentWithData:document completion:^(NSError * _Nullable error) {
+            [[firestore collectionWithPath:collection] addDocumentWithData:document_mutable completion:^(NSError * _Nullable error) {
                 [self handleStringResultWithPotentialError:error command:command result:ref.documentID];
             }];
         }@catch (NSException *exception) {
@@ -1720,8 +1767,15 @@ static NSMutableDictionary* traces;
             NSString* documentId = [command.arguments objectAtIndex:0];
             NSDictionary* document = [command.arguments objectAtIndex:1];
             NSString* collection = [command.arguments objectAtIndex:2];
+            bool  timestamp = [command.arguments objectAtIndex:3];
 
-            [[[firestore collectionWithPath:collection] documentWithPath:documentId] setData:document completion:^(NSError * _Nullable error) {
+            NSMutableDictionary *document_mutable = [document mutableCopy];
+
+            if(timestamp){
+                document_mutable[@"lastUpdate"] = [FIRTimestamp timestampWithDate:[NSDate date]];
+            }
+
+            [[[firestore collectionWithPath:collection] documentWithPath:documentId] setData:document_mutable completion:^(NSError * _Nullable error) {
                 [self handleEmptyResultWithPotentialError:error command:command];
             }];
         }@catch (NSException *exception) {
@@ -1736,10 +1790,17 @@ static NSMutableDictionary* traces;
             NSString* documentId = [command.arguments objectAtIndex:0];
             NSDictionary* document = [command.arguments objectAtIndex:1];
             NSString* collection = [command.arguments objectAtIndex:2];
+            bool  timestamp = [command.arguments objectAtIndex:3];
+
+            NSMutableDictionary *document_mutable = [document mutableCopy];
+
+            if(timestamp){
+                document_mutable[@"lastUpdate"] = [FIRTimestamp timestampWithDate:[NSDate date]];
+            }
 
             FIRDocumentReference* docRef = [[firestore collectionWithPath:collection] documentWithPath:documentId];
             if(docRef != nil){
-                [docRef updateData:document completion:^(NSError * _Nullable error) {
+                [docRef updateData:document_mutable completion:^(NSError * _Nullable error) {
                     [self handleEmptyResultWithPotentialError:error command:command];
                 }];
             }else{

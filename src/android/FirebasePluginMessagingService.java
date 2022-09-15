@@ -149,7 +149,9 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                 sound = notification.getSound();
                 color = notification.getColor();
                 icon = notification.getIcon();
-                image = notification.getImageUrl().toString();
+                if (notification.getImageUrl() != null) {
+                    image = notification.getImageUrl().toString();
+                }
             }else{
                 Log.i(TAG, "Received message: data");
                 messageType = "data";
@@ -237,7 +239,10 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
         if (showNotification) {
             Intent intent = new Intent(this, OnNotificationOpenReceiver.class);
             intent.putExtras(bundle);
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(this, id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+            // Only add on platform levels that support FLAG_IMMUTABLE
+            final int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(this, id.hashCode(), intent, flag);
 
             // Channel
             if(channelId == null || !FirebasePlugin.channelExists(channelId)){
@@ -246,7 +251,6 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
                 Log.d(TAG, "Channel ID: "+channelId);
             }
-
 
 
             NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, channelId);
